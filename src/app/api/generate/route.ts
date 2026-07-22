@@ -30,6 +30,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 验证 photoBase64 格式
+    if (!photoBase64.startsWith('data:image/')) {
+      return NextResponse.json(
+        { error: '照片格式不正确，请上传有效的图片' },
+        { status: 400 }
+      );
+    }
+
+    // 验证图片数据长度（至少需要一些有效数据）
+    const base64Data = photoBase64.split(',')[1];
+    if (!base64Data || base64Data.length < 100) {
+      return NextResponse.json(
+        { error: '照片数据无效或太短，请上传完整的图片' },
+        { status: 400 }
+      );
+    }
+
     // 获取数据
     const scenicSpot = getScenicSpotById(scenicSpotId);
     const costume = getCostumeById(costumeId);
@@ -124,6 +141,12 @@ ${jewelryDesc}
         return NextResponse.json(
           { error: '图像生成服务暂不可用，请稍后重试' },
           { status: 503 }
+        );
+      }
+      if (statusCode === 400) {
+        return NextResponse.json(
+          { error: '照片格式或内容不正确，请重新上传清晰的全身或半身照片' },
+          { status: 400 }
         );
       }
     }
