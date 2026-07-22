@@ -8,21 +8,38 @@
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
 
+## 项目简介
+
+**华裳纪** - 全国景区古装搭配应用
+
+用户可以：
+1. 从全国八大经典景区中选择场景（故宫、西湖、敦煌莫高窟、苏州园林、黄山、凤凰古城、丽江古城、武当山）
+2. 上传全身照或半身照
+3. 选择服饰、首饰、头饰和妆容
+4. AI 生成古装效果图
+5. 保存生成的图片
+
 ## 目录结构
 
 ```
 ├── public/                 # 静态资源
 ├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
 ├── src/
 │   ├── app/                # 页面路由与布局
+│   │   ├── page.tsx        # 首页（景区选择）
+│   │   ├── dress-up/       # 搭配页面
+│   │   └── api/generate/   # 图像生成 API
 │   ├── components/ui/      # Shadcn UI 组件库
 │   ├── hooks/              # 自定义 Hooks
 │   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
+│   │   ├── utils.ts        # 通用工具函数 (cn)
+│   │   ├── types.ts        # 类型定义
+│   │   └── data/           # 数据文件
+│   │       ├── scenic-spots.ts  # 景区数据
+│   │       ├── costumes.ts      # 服饰数据
+│   │       ├── jewelry.ts       # 首饰数据
+│   │       ├── headwear.ts      # 头饰数据
+│   │       └── makeup.ts        # 妆容数据
 │   └── server.ts           # 自定义服务端入口
 ├── next.config.ts          # Next.js 配置
 ├── package.json            # 项目依赖管理

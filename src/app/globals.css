@@ -1,9 +1,28 @@
+@import url('https://fonts.googleapis.cn/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
+/* 自定义传统色 */
+:root {
+  --color-daiqing: #4A5859;
+  --color-yuebai: #D6ECF0;
+  --color-ouhe: #E4C6D0;
+  --color-xiangse: #F0C24B;
+  --color-mose: #2C2C2C;
+  --color-subai: #FAFAFA;
+  --color-yanhui: #9B9B9B;
+}
+
 @theme inline {
+  --color-daiqing: #4A5859;
+  --color-yuebai: #D6ECF0;
+  --color-ouhe: #E4C6D0;
+  --color-xiangse: #F0C24B;
+  --color-mose: #2C2C2C;
+  --color-subai: #FAFAFA;
+  --color-yanhui: #9B9B9B;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -43,7 +62,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --font-sans:
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
+    'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
     system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   --font-mono:
