@@ -13,7 +13,7 @@ export default function HomePage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              'url(https://images.unsplash.com/photo-1584646098378-0874589d76b1?w=1600&q=80)',
+              'url(https://picsum.photos/seed/hero-bg/1600/900)',
           }}
         />
         <div className="relative z-20 flex flex-col items-center justify-center h-full text-center px-4">
