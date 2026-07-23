@@ -10,6 +10,13 @@ import {
   headwear,
   makeupStyles,
 } from '@/lib/data';
+import {
+  useCustomCostumes,
+  useCustomJewelry,
+  useCustomHeadwear,
+  useCustomMakeup,
+  useMergedData,
+} from '@/hooks/use-custom-data';
 import type { Costume, Jewelry, Headwear, Makeup } from '@/lib/types';
 
 function DressUpContent() {
@@ -17,6 +24,18 @@ function DressUpContent() {
   const router = useRouter();
   const spotId = searchParams.get('spot') || 'forbidden-city';
   const scenicSpot = getScenicSpotById(spotId);
+
+  // 自定义数据
+  const { customCostumes, isLoaded: costumesLoaded } = useCustomCostumes();
+  const { customJewelry, isLoaded: jewelryLoaded } = useCustomJewelry();
+  const { customHeadwear, isLoaded: headwearLoaded } = useCustomHeadwear();
+  const { customMakeup, isLoaded: makeupLoaded } = useCustomMakeup();
+
+  // 合并数据
+  const allCostumes = useMergedData(costumes, customCostumes, costumesLoaded);
+  const allJewelry = useMergedData(jewelry, customJewelry, jewelryLoaded);
+  const allHeadwear = useMergedData(headwear, customHeadwear, headwearLoaded);
+  const allMakeup = useMergedData(makeupStyles, customMakeup, makeupLoaded);
 
   // 状态管理
   const [photo, setPhoto] = useState<File | null>(null);
@@ -298,7 +317,7 @@ function DressUpContent() {
             {/* Costume Selection */}
             <SelectionPanel
               title="选择服饰"
-              items={costumes}
+              items={allCostumes}
               selectedId={selectedCostume?.id}
               onSelect={(item) => setSelectedCostume(item as Costume)}
             />
@@ -306,7 +325,7 @@ function DressUpContent() {
             {/* Jewelry Selection */}
             <SelectionPanel
               title="选择首饰（可多选）"
-              items={jewelry}
+              items={allJewelry}
               selectedIds={selectedJewelry.map((j) => j.id)}
               multiSelect
               onSelect={(item) => toggleJewelry(item as Jewelry)}
@@ -315,7 +334,7 @@ function DressUpContent() {
             {/* Headwear Selection */}
             <SelectionPanel
               title="选择头饰"
-              items={headwear}
+              items={allHeadwear}
               selectedId={selectedHeadwear?.id}
               onSelect={(item) => setSelectedHeadwear(item as Headwear)}
             />
@@ -323,7 +342,7 @@ function DressUpContent() {
             {/* Makeup Selection */}
             <SelectionPanel
               title="选择妆容"
-              items={makeupStyles}
+              items={allMakeup}
               selectedId={selectedMakeup?.id}
               onSelect={(item) => setSelectedMakeup(item as Makeup)}
             />

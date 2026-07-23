@@ -1,11 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { Settings } from 'lucide-react';
 import { scenicSpots } from '@/lib/data';
+import { useCustomScenicSpots, useMergedData } from '@/hooks/use-custom-data';
 
 export default function HomePage() {
+  const { customSpots, isLoaded } = useCustomScenicSpots();
+  const allSpots = useMergedData(scenicSpots, customSpots, isLoaded);
+
   return (
     <main className="min-h-screen bg-subai">
+      {/* Floating Action Button */}
+      <Link
+        href="/manage"
+        className="fixed bottom-6 right-6 z-50 p-4 bg-[#4A5859] text-white rounded-full shadow-lg hover:bg-[#3A4849] transition-all hover:scale-110"
+        title="自定义管理"
+      >
+        <Settings className="w-6 h-6" />
+      </Link>
       {/* Hero Section */}
       <section className="relative h-[60vh] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-daiqing/80 to-daiqing/40 z-10" />
@@ -56,7 +69,7 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {scenicSpots.map((spot) => (
+          {allSpots.map((spot) => (
             <Link
               key={spot.id}
               href={`/dress-up?spot=${spot.id}`}
