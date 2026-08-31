@@ -19,12 +19,18 @@ import { costumes } from '@/lib/data/costumes';
 import { jewelry } from '@/lib/data/jewelry';
 import { headwear } from '@/lib/data/headwear';
 import { makeupStyles } from '@/lib/data/makeup';
+import {
+  useI18n,
+  localizeScenicSpots,
+  localizeCostumes,
+} from '@/lib/i18n';
 import type { ScenicSpot, Costume, Jewelry, Headwear, Makeup } from '@/lib/types';
 
 type TabType = 'scenic' | 'costume' | 'jewelry' | 'headwear' | 'makeup';
 
 export default function ManagePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<TabType>('scenic');
 
   const { customSpots, addScenicSpot, removeScenicSpot } = useCustomScenicSpots();
@@ -34,11 +40,11 @@ export default function ManagePage() {
   const { customMakeup, addMakeup, removeMakeup } = useCustomMakeup();
 
   const tabs = [
-    { id: 'scenic' as TabType, label: '场景', count: customSpots.length },
-    { id: 'costume' as TabType, label: '服饰', count: customCostumes.length },
-    { id: 'jewelry' as TabType, label: '首饰', count: customJewelry.length },
-    { id: 'headwear' as TabType, label: '头饰', count: customHeadwear.length },
-    { id: 'makeup' as TabType, label: '妆容', count: customMakeup.length },
+    { id: 'scenic' as TabType, label: t.manage.tabScenic, count: customSpots.length },
+    { id: 'costume' as TabType, label: t.manage.tabCostume, count: customCostumes.length },
+    { id: 'jewelry' as TabType, label: t.manage.tabJewelry, count: customJewelry.length },
+    { id: 'headwear' as TabType, label: t.manage.tabHeadwear, count: customHeadwear.length },
+    { id: 'makeup' as TabType, label: t.manage.tabMakeup, count: customMakeup.length },
   ];
 
   return (
@@ -56,8 +62,8 @@ export default function ManagePage() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-serif text-[#4A5859]">自定义管理</h1>
-              <p className="text-sm text-[#9B9B9B]">添加你喜欢的场景和装扮</p>
+              <h1 className="text-xl font-serif text-[#4A5859]">{t.manage.title}</h1>
+              <p className="text-sm text-[#9B9B9B]">{t.manage.subtitle}</p>
             </div>
           </div>
         </div>
@@ -134,6 +140,8 @@ export default function ManagePage() {
 
 // 图片上传组件
 function ImageUpload({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useI18n();
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -161,7 +169,7 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (value: str
       ) : (
         <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-[#E5E7EB] rounded-lg cursor-pointer hover:border-[#4A5859] transition-colors">
           <Upload className="w-8 h-8 text-[#9B9B9B] mb-2" />
-          <span className="text-sm text-[#9B9B9B]">点击上传图片</span>
+          <span className="text-sm text-[#9B9B9B]">{t.manage.uploadImage}</span>
           <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
         </label>
       )}
@@ -181,6 +189,8 @@ function ScenicSpotForm({
   customItems: ScenicSpot[];
   systemItems: ScenicSpot[];
 }) {
+  const { locale, t } = useI18n();
+  const localizedSystemItems = localizeScenicSpots(systemItems, locale);
   const [name, setName] = useState('');
   const [province, setProvince] = useState('');
   const [description, setDescription] = useState('');
@@ -201,39 +211,39 @@ function ScenicSpotForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-lg font-serif text-[#4A5859]">添加新场景</h3>
+        <h3 className="text-lg font-serif text-[#4A5859]">{t.manage.addScenic}</h3>
         <div>
-          <Label>场景名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：九寨沟" />
+          <Label>{t.manage.scenicName}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.scenicNamePh} />
         </div>
         <div>
-          <Label>所在省份</Label>
-          <Input value={province} onChange={(e) => setProvince(e.target.value)} placeholder="如：四川" />
+          <Label>{t.manage.scenicProvince}</Label>
+          <Input value={province} onChange={(e) => setProvince(e.target.value)} placeholder={t.manage.scenicProvincePh} />
         </div>
         <div>
-          <Label>场景描述</Label>
+          <Label>{t.manage.scenicDesc}</Label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述这个场景的特色和氛围"
+            placeholder={t.manage.scenicDescPh}
           />
         </div>
         <div>
-          <Label>风格定位</Label>
-          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="如：清新自然" />
+          <Label>{t.manage.scenicStyle}</Label>
+          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder={t.manage.scenicStylePh} />
         </div>
         <div>
-          <Label>场景图片</Label>
+          <Label>{t.manage.scenicImage}</Label>
           <ImageUpload value={image} onChange={setImage} />
         </div>
         <Button type="submit" className="w-full bg-[#4A5859] hover:bg-[#3A4849]">
-          添加场景
+          {t.manage.submitScenic}
         </Button>
       </form>
 
       {customItems.length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-serif text-[#4A5859] mb-4">我添加的场景</h3>
+          <h3 className="text-lg font-serif text-[#4A5859] mb-4">{t.manage.myScenic}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {customItems.map((item) => (
               <div key={item.id} className="relative group">
@@ -252,9 +262,11 @@ function ScenicSpotForm({
       )}
 
       <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="text-lg font-serif text-[#4A5859] mb-4">系统预设场景 ({systemItems.length})</h3>
+        <h3 className="text-lg font-serif text-[#4A5859] mb-4">
+          {t.manage.systemScenic} ({localizedSystemItems.length})
+        </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {systemItems.map((item) => (
+          {localizedSystemItems.map((item) => (
             <div key={item.id}>
               <img src={item.image} alt={item.name} className="w-full h-32 object-cover rounded-lg" />
               <p className="mt-2 text-sm font-medium text-[#2C2C2C]">{item.name}</p>
@@ -278,6 +290,8 @@ function CostumeForm({
   customItems: Costume[];
   systemItems: Costume[];
 }) {
+  const { locale, t } = useI18n();
+  const localizedSystemItems = localizeCostumes(systemItems, locale);
   const [name, setName] = useState('');
   const [dynasty, setDynasty] = useState('');
   const [description, setDescription] = useState('');
@@ -300,52 +314,52 @@ function CostumeForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-lg font-serif text-[#4A5859]">添加新服饰</h3>
+        <h3 className="text-lg font-serif text-[#4A5859]">{t.manage.addCostume}</h3>
         <div>
-          <Label>服饰名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：齐胸襦裙" />
+          <Label>{t.manage.costumeName}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.costumeNamePh} />
         </div>
         <div>
-          <Label>朝代</Label>
-          <Input value={dynasty} onChange={(e) => setDynasty(e.target.value)} placeholder="如：唐" />
+          <Label>{t.manage.costumeDynasty}</Label>
+          <Input value={dynasty} onChange={(e) => setDynasty(e.target.value)} placeholder={t.manage.costumeDynastyPh} />
         </div>
         <div>
-          <Label>风格</Label>
-          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="如：华丽" />
+          <Label>{t.manage.costumeStyle}</Label>
+          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder={t.manage.costumeStylePh} />
         </div>
         <div>
-          <Label>类别</Label>
+          <Label>{t.manage.costumeCategory}</Label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as Costume['category'])}
             className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A5859]"
           >
-            <option value="dress">裙装</option>
-            <option value="robe">袍服</option>
-            <option value="jacket">上衣</option>
-            <option value="skirt">下裙</option>
+            <option value="dress">{t.manage.catDress}</option>
+            <option value="robe">{t.manage.catRobe}</option>
+            <option value="jacket">{t.manage.catJacket}</option>
+            <option value="skirt">{t.manage.catSkirt}</option>
           </select>
         </div>
         <div>
-          <Label>服饰描述</Label>
+          <Label>{t.manage.costumeDesc}</Label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述这款服饰的特点"
+            placeholder={t.manage.costumeDescPh}
           />
         </div>
         <div>
-          <Label>服饰图片</Label>
+          <Label>{t.manage.costumeImage}</Label>
           <ImageUpload value={image} onChange={setImage} />
         </div>
         <Button type="submit" className="w-full bg-[#4A5859] hover:bg-[#3A4849]">
-          添加服饰
+          {t.manage.submitCostume}
         </Button>
       </form>
 
       {customItems.length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-serif text-[#4A5859] mb-4">我添加的服饰</h3>
+          <h3 className="text-lg font-serif text-[#4A5859] mb-4">{t.manage.myCostume}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {customItems.map((item) => (
               <div key={item.id} className="relative group">
@@ -365,9 +379,11 @@ function CostumeForm({
       )}
 
       <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="text-lg font-serif text-[#4A5859] mb-4">系统预设服饰 ({systemItems.length})</h3>
+        <h3 className="text-lg font-serif text-[#4A5859] mb-4">
+          {t.manage.systemCostume} ({localizedSystemItems.length})
+        </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {systemItems.slice(0, 6).map((item) => (
+          {localizedSystemItems.slice(0, 6).map((item) => (
             <div key={item.id}>
               <img src={item.image} alt={item.name} className="w-full h-32 object-cover rounded-lg" />
               <p className="mt-2 text-sm font-medium text-[#2C2C2C]">{item.name}</p>
@@ -384,13 +400,13 @@ function JewelryForm({
   onAdd,
   onRemove,
   customItems,
-  systemItems,
 }: {
   onAdd: (item: Omit<Jewelry, 'id'>) => void;
   onRemove: (id: string) => void;
   customItems: Jewelry[];
   systemItems: Jewelry[];
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Jewelry['category']>('necklace');
   const [description, setDescription] = useState('');
@@ -409,45 +425,45 @@ function JewelryForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-lg font-serif text-[#4A5859]">添加新首饰</h3>
+        <h3 className="text-lg font-serif text-[#4A5859]">{t.manage.addJewelry}</h3>
         <div>
-          <Label>首饰名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：珍珠项链" />
+          <Label>{t.manage.jewelryName}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.jewelryNamePh} />
         </div>
         <div>
-          <Label>首饰类别</Label>
+          <Label>{t.manage.jewelryCategory}</Label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as Jewelry['category'])}
             className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A5859]"
           >
-            <option value="necklace">项链</option>
-            <option value="bracelet">手镯</option>
-            <option value="earring">耳饰</option>
-            <option value="ring">戒指</option>
-            <option value="hairpin">发簪</option>
+            <option value="necklace">{t.manage.catNecklace}</option>
+            <option value="bracelet">{t.manage.catBracelet}</option>
+            <option value="earring">{t.manage.catEarring}</option>
+            <option value="ring">{t.manage.catRing}</option>
+            <option value="hairpin">{t.manage.catHairpin}</option>
           </select>
         </div>
         <div>
-          <Label>首饰描述</Label>
+          <Label>{t.manage.jewelryDesc}</Label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述这款首饰的特点"
+            placeholder={t.manage.jewelryDescPh}
           />
         </div>
         <div>
-          <Label>首饰图片</Label>
+          <Label>{t.manage.jewelryImage}</Label>
           <ImageUpload value={image} onChange={setImage} />
         </div>
         <Button type="submit" className="w-full bg-[#4A5859] hover:bg-[#3A4849]">
-          添加首饰
+          {t.manage.submitJewelry}
         </Button>
       </form>
 
       {customItems.length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-serif text-[#4A5859] mb-4">我添加的首饰</h3>
+          <h3 className="text-lg font-serif text-[#4A5859] mb-4">{t.manage.myJewelry}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {customItems.map((item) => (
               <div key={item.id} className="relative group">
@@ -474,13 +490,13 @@ function HeadwearForm({
   onAdd,
   onRemove,
   customItems,
-  systemItems,
 }: {
   onAdd: (item: Omit<Headwear, 'id'>) => void;
   onRemove: (id: string) => void;
   customItems: Headwear[];
   systemItems: Headwear[];
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Headwear['category']>('crown');
   const [description, setDescription] = useState('');
@@ -499,45 +515,45 @@ function HeadwearForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-lg font-serif text-[#4A5859]">添加新头饰</h3>
+        <h3 className="text-lg font-serif text-[#4A5859]">{t.manage.addHeadwear}</h3>
         <div>
-          <Label>头饰名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：步摇" />
+          <Label>{t.manage.headwearName}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.headwearNamePh} />
         </div>
         <div>
-          <Label>头饰类别</Label>
+          <Label>{t.manage.headwearCategory}</Label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as Headwear['category'])}
             className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A5859]"
           >
-            <option value="crown">冠冕</option>
-            <option value="hairpin">发簪</option>
-            <option value="flower">花饰</option>
-            <option value="veil">面纱</option>
-            <option value="comb">梳篦</option>
+            <option value="crown">{t.manage.catCrown}</option>
+            <option value="hairpin">{t.manage.catHwHairpin}</option>
+            <option value="flower">{t.manage.catFlower}</option>
+            <option value="veil">{t.manage.catVeil}</option>
+            <option value="comb">{t.manage.catComb}</option>
           </select>
         </div>
         <div>
-          <Label>头饰描述</Label>
+          <Label>{t.manage.headwearDesc}</Label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述这款头饰的特点"
+            placeholder={t.manage.headwearDescPh}
           />
         </div>
         <div>
-          <Label>头饰图片</Label>
+          <Label>{t.manage.headwearImage}</Label>
           <ImageUpload value={image} onChange={setImage} />
         </div>
         <Button type="submit" className="w-full bg-[#4A5859] hover:bg-[#3A4849]">
-          添加头饰
+          {t.manage.submitHeadwear}
         </Button>
       </form>
 
       {customItems.length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-serif text-[#4A5859] mb-4">我添加的头饰</h3>
+          <h3 className="text-lg font-serif text-[#4A5859] mb-4">{t.manage.myHeadwear}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {customItems.map((item) => (
               <div key={item.id} className="relative group">
@@ -564,13 +580,13 @@ function MakeupForm({
   onAdd,
   onRemove,
   customItems,
-  systemItems,
 }: {
   onAdd: (item: Omit<Makeup, 'id'>) => void;
   onRemove: (id: string) => void;
   customItems: Makeup[];
   systemItems: Makeup[];
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [style, setStyle] = useState('');
   const [category, setCategory] = useState<Makeup['category']>('elegant');
@@ -591,48 +607,48 @@ function MakeupForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-lg font-serif text-[#4A5859]">添加新妆容</h3>
+        <h3 className="text-lg font-serif text-[#4A5859]">{t.manage.addMakeup}</h3>
         <div>
-          <Label>妆容名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：桃花妆" />
+          <Label>{t.manage.makeupName}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.makeupNamePh} />
         </div>
         <div>
-          <Label>妆容风格</Label>
-          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="如：清新" />
+          <Label>{t.manage.makeupStyle}</Label>
+          <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder={t.manage.makeupStylePh} />
         </div>
         <div>
-          <Label>妆容类别</Label>
+          <Label>{t.manage.makeupCategory}</Label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as Makeup['category'])}
             className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A5859]"
           >
-            <option value="elegant">典雅</option>
-            <option value="natural">自然</option>
-            <option value="glamorous">华丽</option>
-            <option value="ethereal">仙气</option>
+            <option value="elegant">{t.manage.catElegant}</option>
+            <option value="natural">{t.manage.catNatural}</option>
+            <option value="glamorous">{t.manage.catGlamorous}</option>
+            <option value="ethereal">{t.manage.catEthereal}</option>
           </select>
         </div>
         <div>
-          <Label>妆容描述</Label>
+          <Label>{t.manage.makeupDesc}</Label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述这款妆容的特点"
+            placeholder={t.manage.makeupDescPh}
           />
         </div>
         <div>
-          <Label>妆容图片</Label>
+          <Label>{t.manage.makeupImage}</Label>
           <ImageUpload value={image} onChange={setImage} />
         </div>
         <Button type="submit" className="w-full bg-[#4A5859] hover:bg-[#3A4849]">
-          添加妆容
+          {t.manage.submitMakeup}
         </Button>
       </form>
 
       {customItems.length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-serif text-[#4A5859] mb-4">我添加的妆容</h3>
+          <h3 className="text-lg font-serif text-[#4A5859] mb-4">{t.manage.myMakeup}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {customItems.map((item) => (
               <div key={item.id} className="relative group">

@@ -1,53 +1,10 @@
-import type { Metadata } from 'next';
 import { Inspector } from 'react-dev-inspector';
+import { I18nProvider } from '@/lib/i18n';
+import { LanguageSwitcher } from '@/components/i18n/language-switcher';
+import { buildRootMetadata } from '@/lib/search-console';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: '华裳纪 - 全国景区古装搭配',
-  description:
-    '穿越时空的美学体验，在全国各大景区选择适合的古装风格，上传照片生成专属古装效果图。',
-  keywords: [
-    '古装搭配',
-    '汉服',
-    '景区拍照',
-    'AI换装',
-    '古装写真',
-    '传统文化',
-  ],
-  authors: [{ name: '华裳纪', url: 'https://code.coze.cn' }],
-  generator: 'Coze Code',
-  // icons: {
-  //   icon: '',
-  // },
-  openGraph: {
-    title: '扣子编程 | 你的 AI 工程师已就位',
-    description:
-      '我正在使用扣子编程 Vibe Coding，让创意瞬间上线。告别拖拽，拥抱心流。',
-    url: 'https://code.coze.cn',
-    siteName: '扣子编程',
-    locale: 'zh_CN',
-    type: 'website',
-    // images: [
-    //   {
-    //     url: '',
-    //     width: 1200,
-    //     height: 630,
-    //     alt: '扣子编程 - 你的 AI 工程师',
-    //   },
-    // ],
-  },
-  // twitter: {
-  //   card: 'summary_large_image',
-  //   title: 'Coze Code | Your AI Engineer is Here',
-  //   description:
-  //     'Build and deploy full-stack applications through AI conversation. No env setup, just flow.',
-  //   // images: [''],
-  // },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+export const metadata = buildRootMetadata();
 
 export default function RootLayout({
   children,
@@ -57,10 +14,13 @@ export default function RootLayout({
   const isDev = process.env.COZE_PROJECT_ENV === 'DEV';
 
   return (
-    <html lang="en">
+    <html lang="zh-CN" suppressHydrationWarning>
       <body className={`antialiased`}>
-        {isDev && <Inspector />}
-        {children}
+        <I18nProvider>
+          {isDev && <Inspector />}
+          <LanguageSwitcher />
+          {children}
+        </I18nProvider>
       </body>
     </html>
   );

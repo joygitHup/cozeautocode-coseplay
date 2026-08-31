@@ -1,5 +1,20 @@
 import type { NextConfig } from 'next';
 
+function getGoogleVerificationRewrites() {
+  const filename = process.env.GOOGLE_SITE_VERIFICATION_HTML;
+  if (!filename) {
+    return [];
+  }
+
+  const path = filename.replace(/^\//, '');
+  return [
+    {
+      source: `/${path}`,
+      destination: '/api/google-site-verification',
+    },
+  ];
+}
+
 const nextConfig: NextConfig = {
   // outputFileTracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
   /* config options here */
@@ -12,6 +27,9 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  async rewrites() {
+    return getGoogleVerificationRewrites();
   },
 };
 
