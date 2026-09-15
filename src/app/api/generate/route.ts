@@ -8,10 +8,46 @@ import {
   getMakeupById,
 } from '@/lib/data';
 import type { Jewelry } from '@/lib/types';
+import { attachGuestCookie, resolveGuestId } from '@/lib/billing/guest';
+import {
+  appendGenerationLog,
+  availableCredits,
+  hashImagePayload,
+  reserveGenerationCredit,
+  rollbackGenerationCredit,
+} from '@/lib/billing/store';
+import { checkGenerationRateLimit } from '@/lib/billing/rate-limit';
+
+function readFingerprint(request: NextRequest, body: unknown): string | null {
+  const header = request.headers.get('x-device-fp');
+  if (header && header.length >= 8) return header.slice(0, 128);
+  if (
+    body &&
+    typeof body === 'object' &&
+    'deviceFingerprint' in body &&
+    typeof (body as { deviceFingerprint: unknown }).deviceFingerprint ===
+      'string'
+  ) {
+    return (body as { deviceFingerprint: string }).deviceFingerprint.slice(
+      0,
+      128,
+    );
+  }
+  return null;
+}
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
+  const { guestId, isNew } = resolveGuestId(request);
+  let reserved: Awaited<ReturnType<typeof reserveGenerationCredit>> | null =
+    null;
+  let deviceFingerprint: string | null = null;
+  let imageHash: string | null = null;
+
   try {
     const body = await request.json();
+    deviceFingerprint = readFingerprint(request, body);
+
     const {
       photoBase64,
       photoType,
@@ -22,54 +58,86 @@ export async function POST(request: NextRequest) {
       scenicSpotId,
     } = body;
 
-    // 验证必填参数
     if (!photoBase64 || !costumeId || !headwearId || !makeupId || !scenicSpotId) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: '缺少必要参数' },
-        { status: 400 }
+        { status: 400 },
       );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
     }
 
-    // 验证 photoBase64 格式
     if (!photoBase64.startsWith('data:image/')) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: '照片格式不正确，请上传有效的图片' },
-        { status: 400 }
+        { status: 400 },
       );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
     }
 
-    // 验证图片数据长度（至少需要一些有效数据）
     const base64Data = photoBase64.split(',')[1];
     if (!base64Data || base64Data.length < 100) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: '照片数据无效或太短，请上传完整的图片' },
-        { status: 400 }
+        { status: 400 },
       );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
     }
 
-    // 获取数据
+    imageHash = hashImagePayload(photoBase64);
+    const rate = checkGenerationRateLimit(guestId, request, imageHash);
+    if (!rate.ok) {
+      const message =
+        rate.reason === 'image'
+          ? '同一照片请求过于频繁，请更换照片或稍后再试'
+          : '请求过于频繁，请稍后再试';
+      const response = NextResponse.json(
+        { error: message, code: 'RATE_LIMITED', reason: rate.reason },
+        { status: 429 },
+      );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
+    }
+
     const scenicSpot = getScenicSpotById(scenicSpotId);
     const costume = getCostumeById(costumeId);
     const headwear = getHeadwearById(headwearId);
     const makeup = getMakeupById(makeupId);
 
     if (!scenicSpot || !costume || !headwear || !makeup) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: '未找到对应的景区或装扮数据' },
-        { status: 400 }
+        { status: 400 },
       );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
     }
 
-    // 获取首饰信息
+    reserved = await reserveGenerationCredit(guestId, deviceFingerprint);
+    if (!reserved.ok) {
+      const response = NextResponse.json(
+        {
+          error: '生成次数不足，请购买次数包',
+          code: 'NEED_CREDITS',
+          credits: availableCredits(reserved.wallet),
+        },
+        { status: 402 },
+      );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
+    }
+
     const jewelryItems: Jewelry[] = jewelryIds
       .map((id: string) => getJewelryById(id))
       .filter((j: Jewelry | undefined): j is Jewelry => j !== undefined);
 
-    // 构建详细的 prompt
     const photoTypeDesc = photoType === 'full-body' ? '全身照' : '半身照';
-    const jewelryDesc = jewelryItems.length > 0
-      ? jewelryItems.map((j: Jewelry) => j.name).join('、')
-      : '无额外首饰';
+    const jewelryDesc =
+      jewelryItems.length > 0
+        ? jewelryItems.map((j: Jewelry) => j.name).join('、')
+        : '无额外首饰';
 
     const prompt = `请将这张${photoTypeDesc}中的人物变换为古装造型，要求如下：
 
@@ -101,17 +169,14 @@ ${jewelryDesc}
 4. 画面质量要高，细节要精致
 5. 光线和阴影要自然真实`;
 
-    // 初始化 SDK
     const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
     const config = new Config();
     const client = new ImageGenerationClient(config, customHeaders);
 
-    // 将 base64 图片转换为 data URL 格式
     const imageDataUrl = photoBase64.startsWith('data:')
       ? photoBase64
       : `data:image/jpeg;base64,${photoBase64}`;
 
-    // 调用图像生成 API
     const response = await client.generate({
       prompt,
       image: imageDataUrl,
@@ -119,41 +184,107 @@ ${jewelryDesc}
     });
 
     const helper = client.getResponseHelper(response);
+    const durationMs = Date.now() - startedAt;
 
     if (helper.success && helper.imageUrls.length > 0) {
-      return NextResponse.json({
+      await appendGenerationLog({
+        guestId,
+        scenicSpotId,
+        success: true,
+        usedFree: reserved.usedFree,
+        creditsBefore: reserved.creditsBefore,
+        creditsAfter: reserved.wallet.credits,
+        durationMs,
+        errorMessage: null,
+        imageHash,
+      });
+
+      const json = NextResponse.json({
         success: true,
         imageUrl: helper.imageUrls[0],
+        credits: availableCredits(reserved.wallet),
+        usedFree: reserved.usedFree,
       });
-    } else {
-      return NextResponse.json(
-        { error: helper.errorMessages.join(', ') || '图像生成失败' },
-        { status: 500 }
-      );
+      if (isNew) attachGuestCookie(json, guestId);
+      return json;
     }
+
+    const errMsg = helper.errorMessages.join(', ') || '图像生成失败';
+    const rolled = await rollbackGenerationCredit(
+      guestId,
+      reserved.usedFree,
+      deviceFingerprint,
+    );
+    await appendGenerationLog({
+      guestId,
+      scenicSpotId,
+      success: false,
+      usedFree: reserved.usedFree,
+      creditsBefore: reserved.creditsBefore,
+      creditsAfter: rolled.credits,
+      durationMs,
+      errorMessage: errMsg,
+      imageHash,
+    });
+
+    const failResponse = NextResponse.json({ error: errMsg }, { status: 500 });
+    if (isNew) attachGuestCookie(failResponse, guestId);
+    return failResponse;
   } catch (error) {
     console.error('图像生成 API 错误:', error);
-    
-    // 处理不同的错误类型
+
+    if (reserved?.ok) {
+      try {
+        const rolled = await rollbackGenerationCredit(
+          guestId,
+          reserved.usedFree,
+          deviceFingerprint,
+        );
+        await appendGenerationLog({
+          guestId,
+          scenicSpotId: null,
+          success: false,
+          usedFree: reserved.usedFree,
+          creditsBefore: reserved.creditsBefore,
+          creditsAfter: rolled.credits,
+          durationMs: Date.now() - startedAt,
+          errorMessage:
+            error instanceof Error ? error.message : 'Internal error',
+          imageHash,
+        });
+      } catch (rollbackError) {
+        console.error('回滚次数失败:', rollbackError);
+      }
+    }
+
     if (error && typeof error === 'object' && 'statusCode' in error) {
       const statusCode = (error as { statusCode: number }).statusCode;
       if (statusCode === 402) {
-        return NextResponse.json(
+        const response = NextResponse.json(
           { error: '图像生成服务暂不可用，请稍后重试' },
-          { status: 503 }
+          { status: 503 },
         );
+        if (isNew) attachGuestCookie(response, guestId);
+        return response;
       }
       if (statusCode === 400) {
-        return NextResponse.json(
-          { error: '照片格式或内容不正确，请重新上传清晰的全身或半身照片' },
-          { status: 400 }
+        const response = NextResponse.json(
+          {
+            error:
+              '照片格式或内容不正确，请重新上传清晰的全身或半身照片',
+          },
+          { status: 400 },
         );
+        if (isNew) attachGuestCookie(response, guestId);
+        return response;
       }
     }
-    
-    return NextResponse.json(
+
+    const response = NextResponse.json(
       { error: '服务器内部错误，请稍后重试' },
-      { status: 500 }
+      { status: 500 },
     );
+    if (isNew) attachGuestCookie(response, guestId);
+    return response;
   }
 }

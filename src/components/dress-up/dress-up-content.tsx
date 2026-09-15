@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -25,7 +25,26 @@ import {
   localizeHeadwearList,
   localizeMakeupList,
 } from '@/lib/i18n';
+import { useWallet } from '@/hooks/use-wallet';
+import { CreditsPaywall } from '@/components/billing/credits-paywall';
+import { getDeviceFingerprint } from '@/lib/client/device-fingerprint';
+import {
+  buildScenicShareUrl,
+  watermarkImage,
+} from '@/lib/client/watermark';
 import type { Costume, Jewelry, Headwear, Makeup } from '@/lib/types';
+
+const PENDING_GENERATE_KEY = 'huashangji_pending_generate';
+
+type PendingGenerate = {
+  spotId: string;
+  photoBase64: string;
+  photoType: 'full-body' | 'half-body';
+  costumeId: string;
+  jewelryIds: string[];
+  headwearId: string;
+  makeupId: string;
+};
 
 type DressUpContentProps = {
   spotId: string;
@@ -34,6 +53,8 @@ type DressUpContentProps = {
 export function DressUpContent({ spotId }: DressUpContentProps) {
   const router = useRouter();
   const { locale, t, format } = useI18n();
+  const { wallet, refresh: refreshWallet } = useWallet();
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const rawSpot = getScenicSpotById(spotId);
   const scenicSpot = rawSpot ? localizeScenicSpot(rawSpot, locale) : undefined;
 
@@ -72,6 +93,81 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
   const [selectedMakeup, setSelectedMakeup] = useState<Makeup | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string>('');
+  const [shareHint, setShareHint] = useState<string | null>(null);
+
+  const runGenerateRequest = useCallback(
+    async (payload: PendingGenerate) => {
+      setIsGenerating(true);
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-device-fp': getDeviceFingerprint(),
+          },
+          body: JSON.stringify({
+            ...payload,
+            deviceFingerprint: getDeviceFingerprint(),
+          }),
+        });
+
+        const data = await response.json();
+        if (response.status === 402 || data.code === 'NEED_CREDITS') {
+          sessionStorage.setItem(PENDING_GENERATE_KEY, JSON.stringify(payload));
+          setPaywallOpen(true);
+          alert(t.billing.needCredits);
+          await refreshWallet();
+          return false;
+        }
+        if (response.status === 429) {
+          alert(data.error || t.dressUp.alertRetry);
+          return false;
+        }
+        if (data.imageUrl) {
+          sessionStorage.removeItem(PENDING_GENERATE_KEY);
+          setGeneratedImage(data.imageUrl);
+          await refreshWallet();
+          return true;
+        }
+        alert(t.dressUp.alertFailed + (data.error || t.dressUp.unknownError));
+        await refreshWallet();
+        return false;
+      } catch (error) {
+        console.error('生成失败:', error);
+        alert(t.dressUp.alertRetry);
+        return false;
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [refreshWallet, t],
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paid = params.get('paid') === '1';
+    if (!paid) return;
+
+    void (async () => {
+      await refreshWallet();
+      const raw = sessionStorage.getItem(PENDING_GENERATE_KEY);
+      if (raw) {
+        try {
+          const pending = JSON.parse(raw) as PendingGenerate;
+          if (pending.spotId === spotId) {
+            alert(t.billing.autoRetrying);
+            await runGenerateRequest(pending);
+          }
+        } catch {
+          alert(t.billing.paidSuccess);
+        }
+      } else {
+        alert(t.billing.paidSuccess);
+      }
+      router.replace(`/dress-up/${spotId}`);
+    })();
+  }, [refreshWallet, router, runGenerateRequest, spotId, t.billing]);
 
   const handlePhotoUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,42 +198,20 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
       return;
     }
 
-    setIsGenerating(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const photoBase64 = ev.target?.result as string;
-
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            photoBase64,
-            photoType,
-            costumeId: selectedCostume.id,
-            jewelryIds: selectedJewelry.map((j) => j.id),
-            headwearId: selectedHeadwear.id,
-            makeupId: selectedMakeup.id,
-            scenicSpotId: spotId,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.imageUrl) {
-          setGeneratedImage(data.imageUrl);
-        } else {
-          alert(
-            t.dressUp.alertFailed + (data.error || t.dressUp.unknownError),
-          );
-        }
-        setIsGenerating(false);
-      };
-      reader.readAsDataURL(photo);
-    } catch (error) {
-      console.error('生成失败:', error);
-      alert(t.dressUp.alertRetry);
-      setIsGenerating(false);
-    }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const photoBase64 = ev.target?.result as string;
+      await runGenerateRequest({
+        spotId,
+        photoBase64,
+        photoType,
+        costumeId: selectedCostume.id,
+        jewelryIds: selectedJewelry.map((j) => j.id),
+        headwearId: selectedHeadwear.id,
+        makeupId: selectedMakeup.id,
+      });
+    };
+    reader.readAsDataURL(photo);
   };
 
   const handleSave = () => {
@@ -147,6 +221,48 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
       link.download = `${t.common.brand}-${scenicSpot?.name || t.dressUp.downloadFallback}-${Date.now()}.png`;
       link.click();
     }
+  };
+
+  const handleSaveWatermark = async () => {
+    if (!generatedImage) return;
+    try {
+      const marked = await watermarkImage(generatedImage, t.common.brand);
+      const link = document.createElement('a');
+      link.href = marked;
+      link.download = `${t.common.brand}-${scenicSpot?.name || t.dressUp.downloadFallback}-wm-${Date.now()}.png`;
+      link.click();
+    } catch {
+      alert(t.dressUp.alertRetry);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    const url = buildScenicShareUrl(spotId);
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareHint(t.billing.shareCopied);
+      window.setTimeout(() => setShareHint(null), 2000);
+    } catch {
+      setShareHint(url);
+    }
+  };
+
+  const handlePaid = async () => {
+    await refreshWallet();
+    const raw = sessionStorage.getItem(PENDING_GENERATE_KEY);
+    if (raw) {
+      try {
+        const pending = JSON.parse(raw) as PendingGenerate;
+        if (pending.spotId === spotId) {
+          alert(t.billing.autoRetrying);
+          await runGenerateRequest(pending);
+          return;
+        }
+      } catch {
+        // fall through
+      }
+    }
+    alert(t.billing.paidSuccess);
   };
 
   if (!scenicSpot) {
@@ -187,7 +303,24 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
             {locale === 'zh' ? '' : ' '}
             {t.dressUp.titleSuffix}
           </h1>
-          <div className="w-20" aria-hidden="true" />
+          <div className="flex items-center gap-2 pr-16 sm:pr-20">
+            <button
+              type="button"
+              onClick={() => setPaywallOpen(true)}
+              className="text-sm text-daiqing bg-yuebai/60 hover:bg-yuebai px-3 py-1.5 rounded-full transition-colors"
+            >
+              {format(t.billing.creditsLabel, {
+                n: wallet?.available ?? '…',
+              })}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaywallOpen(true)}
+              className="text-sm text-white bg-daiqing hover:bg-daiqing/90 px-3 py-1.5 rounded-full transition-colors"
+            >
+              {t.billing.buyCredits}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -354,6 +487,33 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
                   </svg>
                   {t.dressUp.saveImage}
                 </button>
+                <div className="mt-2 grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveWatermark()}
+                    className="w-full py-2.5 border border-daiqing/20 text-daiqing rounded-xl text-sm hover:bg-yuebai/40 transition-colors"
+                  >
+                    {t.billing.saveWatermark}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyShareLink()}
+                    className="w-full py-2.5 border border-daiqing/20 text-daiqing rounded-xl text-sm hover:bg-yuebai/40 transition-colors"
+                  >
+                    {t.billing.shareLink}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerate()}
+                    disabled={isGenerating}
+                    className="w-full py-2.5 bg-daiqing text-white rounded-xl text-sm hover:bg-daiqing/90 transition-colors disabled:opacity-50"
+                  >
+                    {t.billing.regenerate}
+                  </button>
+                </div>
+                {shareHint ? (
+                  <p className="text-xs text-yanhui mt-2 break-all">{shareHint}</p>
+                ) : null}
               </div>
             )}
           </div>
@@ -448,6 +608,17 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
           </div>
         </div>
       </div>
+
+      <CreditsPaywall
+        open={paywallOpen}
+        onOpenChange={setPaywallOpen}
+        wallet={wallet}
+        returnPath={`/dress-up/${spotId}`}
+        onRefreshWallet={refreshWallet}
+        onPaid={() => {
+          void handlePaid();
+        }}
+      />
     </div>
   );
 }

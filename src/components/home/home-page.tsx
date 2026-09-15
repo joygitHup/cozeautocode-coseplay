@@ -36,8 +36,7 @@ export function HomePage() {
             role="img"
             aria-label={t.home.heroAria}
             style={{
-              backgroundImage:
-                'url(https://picsum.photos/seed/hero-bg/1600/900)',
+              backgroundImage: 'url(/scenic/hero.jpg)',
             }}
           />
           <div className="relative z-20 flex flex-col items-center justify-center h-full text-center px-4">

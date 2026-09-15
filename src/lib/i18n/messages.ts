@@ -67,6 +67,37 @@ export type Messages = {
     exploreMore: string;
     relatedNavAria: string;
   };
+  billing: {
+    creditsLabel: string;
+    buyCredits: string;
+    buyTitle: string;
+    buyDesc: string;
+    remaining: string;
+    featured: string;
+    creditsUnit: string;
+    payWechat: string;
+    payAlipay: string;
+    payMock: string;
+    processing: string;
+    waitingPay: string;
+    checkoutFailed: string;
+    needCredits: string;
+    paidSuccess: string;
+    firstPurchaseBanner: string;
+    firstPurchaseTag: string;
+    bindPhone: string;
+    bindPhoneHint: string;
+    phonePlaceholder: string;
+    bindAction: string;
+    phoneBindSuccess: string;
+    phoneBindFailed: string;
+    phoneMerged: string;
+    shareLink: string;
+    shareCopied: string;
+    saveWatermark: string;
+    regenerate: string;
+    autoRetrying: string;
+  };
   manage: {
     title: string;
     subtitle: string;
@@ -170,7 +201,8 @@ export const messages: Record<Locale, Messages> = {
       manageAria: '打开自定义管理页面',
       heroAria: '华裳纪古装搭配应用背景图',
       heroTagline: '穿越千年的美学之旅',
-      heroSubtitle: '在全国各大景区，寻找属于你的古装风格',
+      heroSubtitle:
+        '上传照片，AI 生成景区古装大片 · 首次免费',
       spotsHeading: '选择你的景区',
       spotsSubtitle: '每个景区都有独特的气质，等待与你相遇',
       spotsNavAria: '全国景区古装搭配场景',
@@ -223,6 +255,37 @@ export const messages: Record<Locale, Messages> = {
       faq: '常见问题',
       exploreMore: '探索更多景区',
       relatedNavAria: '其他景区古装搭配',
+    },
+    billing: {
+      creditsLabel: '剩余 {n} 次',
+      buyCredits: '购买次数',
+      buyTitle: '购买生成次数',
+      buyDesc: 'AI 古装生成按次计费，失败不扣次。',
+      remaining: '当前可用 {n} 次。',
+      featured: '主推',
+      creditsUnit: '次',
+      payWechat: '微信支付',
+      payAlipay: '支付宝',
+      payMock: '模拟支付（开发）',
+      processing: '创建订单中…',
+      waitingPay: '请在新窗口完成支付，成功后将自动到账。',
+      checkoutFailed: '创建支付失败，请重试',
+      needCredits: '生成次数不足，请先购买次数包',
+      paidSuccess: '支付成功，次数已到账',
+      firstPurchaseBanner: '限时首充立减 ¥{yuan}',
+      firstPurchaseTag: '首充优惠',
+      bindPhone: '绑定手机号',
+      bindPhoneHint: '换设备也能找回次数；同号会自动合并钱包',
+      phonePlaceholder: '11 位手机号',
+      bindAction: '绑定',
+      phoneBindSuccess: '手机号绑定成功',
+      phoneBindFailed: '绑定失败，请检查手机号',
+      phoneMerged: '已绑定并合并另一设备钱包',
+      shareLink: '复制分享短链',
+      shareCopied: '已复制景区短链',
+      saveWatermark: '保存含水印图',
+      regenerate: '再生成一次',
+      autoRetrying: '支付成功，正在自动重新生成…',
     },
     manage: {
       title: '自定义管理',
@@ -326,7 +389,7 @@ export const messages: Record<Locale, Messages> = {
       heroAria: 'Huashangji traditional costume styling background',
       heroTagline: 'An aesthetic journey across a thousand years',
       heroSubtitle:
-        'Discover your traditional Chinese look at iconic scenic spots nationwide',
+        'Upload a photo and generate scenic costume portraits with AI · First try free',
       spotsHeading: 'Choose Your Scenic Spot',
       spotsSubtitle: 'Every place has a unique mood waiting to meet you',
       spotsNavAria: 'Scenic spots for traditional costume styling',
@@ -381,6 +444,37 @@ export const messages: Record<Locale, Messages> = {
       faq: 'FAQ',
       exploreMore: 'Explore More Spots',
       relatedNavAria: 'Other scenic costume styling pages',
+    },
+    billing: {
+      creditsLabel: '{n} left',
+      buyCredits: 'Buy credits',
+      buyTitle: 'Buy generation credits',
+      buyDesc: 'Pay per AI generation. Failed runs are not charged.',
+      remaining: 'You have {n} available.',
+      featured: 'Best',
+      creditsUnit: 'credits',
+      payWechat: 'WeChat Pay',
+      payAlipay: 'Alipay',
+      payMock: 'Mock pay (dev)',
+      processing: 'Creating order…',
+      waitingPay: 'Complete payment in the new window. Credits unlock automatically.',
+      checkoutFailed: 'Checkout failed. Please try again.',
+      needCredits: 'Not enough credits. Please buy a pack.',
+      paidSuccess: 'Payment successful. Credits added.',
+      firstPurchaseBanner: 'First-purchase discount ¥{yuan}',
+      firstPurchaseTag: 'First deal',
+      bindPhone: 'Bind phone',
+      bindPhoneHint: 'Keep credits across devices; same number merges wallets',
+      phonePlaceholder: '11-digit mobile',
+      bindAction: 'Bind',
+      phoneBindSuccess: 'Phone bound',
+      phoneBindFailed: 'Bind failed. Check the number.',
+      phoneMerged: 'Bound and merged another device wallet',
+      shareLink: 'Copy short link',
+      shareCopied: 'Scenic short link copied',
+      saveWatermark: 'Save with watermark',
+      regenerate: 'Generate again',
+      autoRetrying: 'Paid. Auto-retrying generation…',
     },
     manage: {
       title: 'Custom Manager',

@@ -121,6 +121,8 @@ pids
 *.pid
 *.seed
 *.pid.lock
+data/billing-store.json
+data/
 # Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Cache
