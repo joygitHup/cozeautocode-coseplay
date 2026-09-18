@@ -8,6 +8,7 @@ import {
   createCheckoutSession,
   resolveChannel,
 } from '@/lib/billing/payment';
+import type { WechatScene } from '@/lib/billing/wechat-v3';
 import {
   createOrder,
   getPricingConfig,
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
       packId?: string;
       channel?: string;
       returnPath?: string;
+      scene?: WechatScene;
+      openid?: string;
     };
     const pricing = await getPricingConfig();
     const packs = resolveEffectivePacks(pricing);
@@ -59,13 +62,25 @@ export async function POST(request: NextRequest) {
       order,
       pack,
       channel,
-      returnPath: body.returnPath,
+      scene: body.scene,
+      openid: body.openid,
+      returnUrl: body.returnPath,
+      headers: request.headers,
     });
+
     const response = NextResponse.json({
       orderId: order.id,
-      payUrl: checkout.payUrl,
+      payUrl: 'payUrl' in checkout ? checkout.payUrl : undefined,
       channel: checkout.channel,
-      mock: checkout.mock ?? false,
+      mock: checkout.mock,
+      scene: 'scene' in checkout ? checkout.scene : undefined,
+      codeUrl: 'codeUrl' in checkout ? checkout.codeUrl : undefined,
+      mwebUrl: 'mwebUrl' in checkout ? checkout.mwebUrl : undefined,
+      jsapiParams:
+        'jsapiParams' in checkout ? checkout.jsapiParams : undefined,
+      needOAuth: 'needOAuth' in checkout ? checkout.needOAuth : undefined,
+      authorizeUrl:
+        'authorizeUrl' in checkout ? checkout.authorizeUrl : undefined,
       amountFen: order.amountFen,
       listPriceFen: order.listPriceFen,
       discountFen: order.discountFen,

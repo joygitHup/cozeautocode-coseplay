@@ -1,20 +1,29 @@
-import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
+import type { NextRequest } from 'next/server';
 import { getSiteUrl } from '@/lib/seo';
 import type { CreditPack } from '@/lib/billing/products';
 import type { OrderRecord } from '@/lib/billing/store-types';
+import {
+  createWechatOrder,
+  type WechatCheckoutResult,
+  type WechatScene,
+} from '@/lib/billing/wechat-v3';
 
 export type PaymentChannel = 'mock' | 'wechat' | 'alipay';
 
-export function getPaymentMode(): 'mock' | 'xunhupay' {
+/** mock = 本地演示；wechat_direct = 微信支付 V3 直连 */
+export type PaymentMode = 'mock' | 'wechat_direct';
+
+export function getPaymentMode(): PaymentMode {
   const mode = process.env.PAYMENT_MODE?.toLowerCase();
-  if (mode === 'xunhupay') return 'xunhupay';
-  return 'mock';
+  return mode === 'wechat_direct' ? 'wechat_direct' : 'mock';
 }
 
 export function resolveChannel(preferred?: string): PaymentChannel {
   if (preferred === 'alipay' || preferred === 'wechat' || preferred === 'mock') {
     return preferred;
   }
+  // 默认按 mode 选：mock 时 mock，wechat_direct 时 wechat
   return getPaymentMode() === 'mock' ? 'mock' : 'wechat';
 }
 
@@ -23,13 +32,20 @@ export function assertProductionBillingConfig(): void {
   const mode = getPaymentMode();
   const siteUrl = getSiteUrl();
   const isProdLike =
-    mode === 'xunhupay' || process.env.NODE_ENV === 'production';
+    mode === 'wechat_direct' || process.env.NODE_ENV === 'production';
 
-  if (mode === 'xunhupay') {
-    if (!process.env.XUNHUPAY_APPID || !process.env.XUNHUPAY_APPSECRET) {
-      throw new Error(
-        'PAYMENT_MODE=xunhupay 时必须配置 XUNHUPAY_APPID / XUNHUPAY_APPSECRET',
-      );
+  if (mode === 'wechat_direct') {
+    const required = [
+      'WECHAT_MCHID',
+      'WECHAT_APPID',
+      'WECHAT_API_V3_KEY',
+      'WECHAT_PRIVATE_KEY_PATH',
+      'WECHAT_CERT_SERIAL_NO',
+    ];
+    for (const key of required) {
+      if (!process.env[key]) {
+        throw new Error(`微信支付 V3 缺少配置：${key}`);
+      }
     }
     if (
       !process.env.NEXT_PUBLIC_SITE_URL ||
@@ -37,7 +53,7 @@ export function assertProductionBillingConfig(): void {
       siteUrl.includes('your-domain')
     ) {
       throw new Error(
-        '真实支付必须设置公网 NEXT_PUBLIC_SITE_URL（不可为 localhost / your-domain 占位）',
+        '真实支付必须设置公网 NEXT_PUBLIC_SITE_URL（不可为 localhost / your-domain）',
       );
     }
     if (!siteUrl.startsWith('https://')) {
@@ -55,23 +71,23 @@ export function assertProductionBillingConfig(): void {
   }
 }
 
-export type CheckoutResult = {
-  orderId: string;
-  payUrl: string;
-  channel: PaymentChannel;
-  mock?: boolean;
-};
+export type CheckoutResult =
+  | { orderId: string; payUrl: string; channel: 'mock'; mock: true }
+  | (WechatCheckoutResult & { mock: false });
 
 export async function createCheckoutSession(input: {
   order: OrderRecord;
   pack: CreditPack;
   channel: PaymentChannel;
-  returnPath?: string;
+  scene?: WechatScene;
+  openid?: string;
+  returnUrl?: string;
+  headers: Headers;
 }): Promise<CheckoutResult> {
   const mode = getPaymentMode();
   const siteUrl = getSiteUrl();
 
-  if (mode === 'mock') {
+  if (mode === 'mock' || input.channel === 'mock') {
     return {
       orderId: input.order.id,
       payUrl: `${siteUrl}/api/billing/mock-pay?orderId=${input.order.id}`,
@@ -82,96 +98,42 @@ export async function createCheckoutSession(input: {
 
   assertProductionBillingConfig();
 
-  const appId = process.env.XUNHUPAY_APPID!;
-  const appSecret = process.env.XUNHUPAY_APPSECRET!;
+  const scene: WechatScene =
+    input.scene ||
+    resolveWechatScene({
+      userAgent: input.headers.get('user-agent') || '',
+      openidProvided: Boolean(input.openid),
+    });
 
-  const notifyUrl =
-    process.env.XUNHUPAY_NOTIFY_URL || `${siteUrl}/api/billing/webhook`;
-  const returnPath =
-    input.returnPath ||
-    process.env.XUNHUPAY_RETURN_URL ||
-    `${siteUrl}/`;
-  const returnUrl = returnPath.startsWith('http')
-    ? returnPath
-    : `${siteUrl}${returnPath.startsWith('/') ? '' : '/'}${returnPath}`;
-
-  const type = input.channel === 'alipay' ? 'alipay' : 'wechat';
-  const payload: Record<string, string> = {
-    version: '1.1',
-    appid: appId,
-    trade_order_id: input.order.id,
-    total_fee: (input.order.amountFen / 100).toFixed(2),
-    title: input.pack.nameZh,
-    time: Math.floor(Date.now() / 1000).toString(),
-    notify_url: notifyUrl,
-    return_url: returnUrl.includes('?')
-      ? `${returnUrl}&paid=1&orderId=${input.order.id}`
-      : `${returnUrl}?paid=1&orderId=${input.order.id}`,
-    callback_url: returnUrl,
-    plugins: 'huashangji',
-    nonce_str: createHash('md5').update(input.order.id).digest('hex').slice(0, 16),
-    type,
-  };
-
-  payload.hash = signXunhu(payload, appSecret);
-
-  const endpoint =
-    process.env.XUNHUPAY_GATEWAY ||
-    'https://api.xunhupay.com/payment/do.html';
-
-  const body = new URLSearchParams(payload);
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+  const result = await createWechatOrder({
+    order: input.order,
+    pack: input.pack,
+    scene,
+    openid: input.openid,
+    returnUrl: input.returnUrl,
+    headers: input.headers,
   });
-  const json = (await response.json()) as {
-    errcode?: number;
-    errmsg?: string;
-    url?: string;
-    url_qrcode?: string;
-  };
 
-  if (json.errcode !== 0 || (!json.url && !json.url_qrcode)) {
-    throw new Error(json.errmsg || 'Payment gateway error');
-  }
-
-  return {
-    orderId: input.order.id,
-    payUrl: json.url || json.url_qrcode || '',
-    channel: input.channel,
-    mock: false,
-  };
+  return { ...result, mock: false };
 }
 
-export function signXunhu(
-  params: Record<string, string>,
-  secret: string,
-): string {
-  const keys = Object.keys(params)
-    .filter((key) => key !== 'hash' && params[key] !== '' && params[key] != null)
-    .sort();
-  const str = keys.map((key) => `${key}=${params[key]}`).join('&');
-  return createHash('md5')
-    .update(str + secret)
-    .digest('hex');
-}
-
-export function verifyXunhuSign(
-  params: Record<string, string>,
-  secret: string,
-): boolean {
-  const incoming = params.hash;
-  if (!incoming) return false;
-  const expected = signXunhu(params, secret);
-  try {
-    return timingSafeEqual(
-      Buffer.from(incoming.toLowerCase()),
-      Buffer.from(expected.toLowerCase()),
-    );
-  } catch {
-    return false;
+/** 根据 UA 推断微信支付场景 */
+export function resolveWechatScene(input: {
+  userAgent: string;
+  openidProvided?: boolean;
+}): WechatScene {
+  const ua = input.userAgent.toLowerCase();
+  if (ua.includes('micromessenger')) {
+    // 微信内浏览器或小程序 webview，需要 JSAPI
+    return 'jsapi';
   }
+  // 简单 mobile 检测
+  const isMobile =
+    ua.includes('mobile') ||
+    ua.includes('android') ||
+    ua.includes('iphone');
+  if (isMobile) return 'h5';
+  return 'native';
 }
 
 export function getAdminPassword(): string {
@@ -192,4 +154,15 @@ export function verifyAdminSession(token: string | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+/** 兼容老调用方：从 NextRequest 头读取 UA 并推断场景 */
+export function resolveWechatSceneFromRequest(
+  request: NextRequest,
+  openid?: string,
+): WechatScene {
+  return resolveWechatScene({
+    userAgent: request.headers.get('user-agent') || '',
+    openidProvided: Boolean(openid),
+  });
 }

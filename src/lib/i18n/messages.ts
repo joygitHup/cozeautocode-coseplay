@@ -97,6 +97,8 @@ export type Messages = {
     saveWatermark: string;
     regenerate: string;
     autoRetrying: string;
+    payAlipayComingSoon: string;
+    wechatScanQr: string;
   };
   manage: {
     title: string;
@@ -286,6 +288,8 @@ export const messages: Record<Locale, Messages> = {
       saveWatermark: '保存含水印图',
       regenerate: '再生成一次',
       autoRetrying: '支付成功，正在自动重新生成…',
+      payAlipayComingSoon: '支付宝（敬请期待）',
+      wechatScanQr: '微信扫码支付',
     },
     manage: {
       title: '自定义管理',
@@ -475,6 +479,8 @@ export const messages: Record<Locale, Messages> = {
       saveWatermark: 'Save with watermark',
       regenerate: 'Generate again',
       autoRetrying: 'Paid. Auto-retrying generation…',
+      payAlipayComingSoon: 'Alipay (coming soon)',
+      wechatScanQr: 'Scan with WeChat to pay',
     },
     manage: {
       title: 'Custom Manager',

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import {
   Sheet,
   SheetContent,
@@ -23,6 +24,33 @@ type CreditsPaywallProps = {
   onRefreshWallet?: () => Promise<void> | void;
 };
 
+type PayScene = 'native' | 'h5' | 'jsapi' | undefined;
+
+type CheckoutResponse = {
+  payUrl?: string;
+  orderId?: string;
+  mock?: boolean;
+  scene?: PayScene;
+  codeUrl?: string;
+  mwebUrl?: string;
+  jsapiParams?: Record<string, string>;
+  needOAuth?: boolean;
+  authorizeUrl?: string;
+  error?: string;
+};
+
+declare global {
+  interface Window {
+    WeixinJSBridge?: {
+      invoke: (
+        api: string,
+        params: Record<string, string>,
+        callback: (res: { err_msg?: string }) => void,
+      ) => void;
+    };
+  }
+}
+
 export function CreditsPaywall({
   open,
   onOpenChange,
@@ -38,6 +66,9 @@ export function CreditsPaywall({
   const [phone, setPhone] = useState('');
   const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
   const [bindingPhone, setBindingPhone] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [payScene, setPayScene] = useState<PayScene>(undefined);
+  const [nativeHint, setNativeHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (wallet?.phone) setPhone(wallet.phone);
@@ -56,6 +87,9 @@ export function CreditsPaywall({
         window.clearInterval(timer);
         setPendingOrderId(null);
         setBusyPackId(null);
+        setQrDataUrl(null);
+        setPayScene(undefined);
+        setNativeHint(null);
         onPaid();
         onOpenChange(false);
       }
@@ -64,55 +98,111 @@ export function CreditsPaywall({
     return () => window.clearInterval(timer);
   }, [pendingOrderId, onPaid, onOpenChange]);
 
-  const handleBuy = async (
-    packId: string,
-    channel: 'wechat' | 'alipay' | 'mock',
-  ) => {
-    setError(null);
-    setBusyPackId(packId);
-    try {
-      const response = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-device-fp': getDeviceFingerprint(),
-        },
-        body: JSON.stringify({
-          packId,
-          channel,
-          returnPath: returnPath
-            ? `${returnPath}?paid=1`
-            : undefined,
-        }),
-      });
-      const data = (await response.json()) as {
-        payUrl?: string;
-        orderId?: string;
-        mock?: boolean;
-        error?: string;
-      };
-      if (!response.ok || !data.payUrl || !data.orderId) {
-        setError(data.error || t.billing.checkoutFailed);
+  const handleBuy = useCallback(
+    async (
+      packId: string,
+      channel: 'wechat' | 'alipay' | 'mock',
+    ) => {
+      setError(null);
+      setQrDataUrl(null);
+      setPayScene(undefined);
+      setNativeHint(null);
+      setBusyPackId(packId);
+      try {
+        const response = await fetch('/api/billing/checkout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-device-fp': getDeviceFingerprint(),
+          },
+          body: JSON.stringify({
+            packId,
+            channel,
+            returnPath: returnPath
+              ? `${returnPath}?paid=1`
+              : undefined,
+          }),
+        });
+        const data = (await response.json()) as CheckoutResponse;
+        if (!response.ok || !data.orderId) {
+          setError(data.error || t.billing.checkoutFailed);
+          setBusyPackId(null);
+          return;
+        }
+
+        // JSAPI 需要 OAuth 拿 openid
+        if (data.needOAuth && data.authorizeUrl) {
+          window.location.href = data.authorizeUrl;
+          return;
+        }
+
+        setPendingOrderId(data.orderId);
+
+        // mock 模式：直接跳 mock-pay
+        if (data.mock && data.payUrl) {
+          const url = new URL(data.payUrl, window.location.origin);
+          if (returnPath) {
+            url.searchParams.set(
+              'returnTo',
+              `${window.location.origin}${returnPath}?paid=1&orderId=${data.orderId}`,
+            );
+          }
+          window.open(url.toString(), '_blank', 'noopener,noreferrer');
+          return;
+        }
+
+        // 微信直连
+        if (data.scene === 'native' && data.codeUrl) {
+          const dataUrl = await QRCode.toDataURL(data.codeUrl, {
+            margin: 2,
+            width: 240,
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+          setQrDataUrl(dataUrl);
+          setPayScene('native');
+          setNativeHint(t.billing.wechatScanQr);
+          setBusyPackId(null);
+          return;
+        }
+
+        if (data.scene === 'h5' && data.mwebUrl) {
+          const url = new URL(data.mwebUrl, window.location.origin);
+          if (returnPath) {
+            url.searchParams.set(
+              'returnTo',
+              `${window.location.origin}${returnPath}?paid=1&orderId=${data.orderId}`,
+            );
+          }
+          window.open(url.toString(), '_blank', 'noopener,noreferrer');
+          return;
+        }
+
+        if (data.scene === 'jsapi' && data.jsapiParams && window.WeixinJSBridge) {
+          window.WeixinJSBridge.invoke(
+            'requestPayment',
+            data.jsapiParams,
+            (res) => {
+              if (res.err_msg && res.err_msg !== 'get_brand_wcpay_request:ok') {
+                setError(t.billing.checkoutFailed);
+                setBusyPackId(null);
+              }
+            },
+          );
+          return;
+        }
+
+        // 其他情况兜底
+        if (data.payUrl) {
+          window.open(data.payUrl, '_blank', 'noopener,noreferrer');
+        }
+      } catch {
+        setError(t.billing.checkoutFailed);
         setBusyPackId(null);
-        return;
       }
-
-      setPendingOrderId(data.orderId);
-
-      const url = new URL(data.payUrl, window.location.origin);
-      if (returnPath) {
-        url.searchParams.set(
-          'returnTo',
-          `${window.location.origin}${returnPath}?paid=1&orderId=${data.orderId}`,
-        );
-      }
-      window.open(url.toString(), '_blank', 'noopener,noreferrer');
-    } catch {
-      setError(t.billing.checkoutFailed);
-      setBusyPackId(null);
-    }
-  };
+    },
+    [returnPath, t.billing.checkoutFailed, t.billing.wechatScanQr, onPaid, onOpenChange],
+  );
 
   const bindPhone = async () => {
     setPhoneMsg(null);
@@ -166,6 +256,22 @@ export function CreditsPaywall({
               ),
             })}
           </p>
+        ) : null}
+
+        {qrDataUrl && payScene === 'native' ? (
+          <div className="mt-6 flex flex-col items-center gap-3 px-1">
+            <img
+              src={qrDataUrl}
+              alt={t.billing.wechatScanQr}
+              className="w-60 h-60 rounded-xl border border-yuebai"
+            />
+            <p className="text-sm text-daiqing text-center">
+              {nativeHint ?? t.billing.wechatScanQr}
+            </p>
+            <p className="text-xs text-yanhui text-center">
+              {t.billing.waitingPay}
+            </p>
+          </div>
         ) : null}
 
         <div className="mt-6 space-y-3 px-1">
@@ -232,11 +338,12 @@ export function CreditsPaywall({
                       </Button>
                       <Button
                         variant="outline"
-                        className="flex-1"
-                        disabled={busyPackId !== null}
-                        onClick={() => handleBuy(pack.id, 'alipay')}
+                        className="flex-1 cursor-not-allowed opacity-50"
+                        disabled
+                        aria-disabled="true"
+                        title={t.billing.payAlipayComingSoon}
                       >
-                        {t.billing.payAlipay}
+                        {t.billing.payAlipayComingSoon}
                       </Button>
                     </>
                   )}
