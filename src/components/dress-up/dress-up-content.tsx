@@ -15,6 +15,7 @@ import {
   useCustomJewelry,
   useCustomHeadwear,
   useCustomMakeup,
+  useCustomScenicSpots,
   useMergedData,
 } from '@/hooks/use-custom-data';
 import {
@@ -44,6 +45,13 @@ type PendingGenerate = {
   jewelryIds: string[];
   headwearId: string;
   makeupId: string;
+  // 自定义场景（静态数据查不到时）随请求提交，供服务端兜底
+  customSpot?: {
+    name: string;
+    province: string;
+    style: string;
+    description: string;
+  };
 };
 
 type DressUpContentProps = {
@@ -55,8 +63,14 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
   const { locale, t, format } = useI18n();
   const { wallet, refresh: refreshWallet } = useWallet();
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const rawSpot = getScenicSpotById(spotId);
-  const scenicSpot = rawSpot ? localizeScenicSpot(rawSpot, locale) : undefined;
+  const { customSpots } = useCustomScenicSpots();
+  const staticSpot = getScenicSpotById(spotId);
+  const customSpot = staticSpot
+    ? undefined
+    : customSpots.find((s) => s.id === spotId);
+  const scenicSpot = staticSpot
+    ? localizeScenicSpot(staticSpot, locale)
+    : customSpot;
 
   const { customCostumes, isLoaded: costumesLoaded } = useCustomCostumes();
   const { customJewelry, isLoaded: jewelryLoaded } = useCustomJewelry();
@@ -209,6 +223,16 @@ export function DressUpContent({ spotId }: DressUpContentProps) {
         jewelryIds: selectedJewelry.map((j) => j.id),
         headwearId: selectedHeadwear.id,
         makeupId: selectedMakeup.id,
+        ...(customSpot
+          ? {
+              customSpot: {
+                name: customSpot.name,
+                province: customSpot.province,
+                style: customSpot.style,
+                description: customSpot.description,
+              },
+            }
+          : {}),
       });
     };
     reader.readAsDataURL(photo);

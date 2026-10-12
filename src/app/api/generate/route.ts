@@ -101,7 +101,26 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    const scenicSpot = getScenicSpotById(spotId);
+    // 静态数据查不到时，允许前端提交自定义场景数据兜底
+    const scenicSpot =
+      getScenicSpotById(spotId) ??
+      (body.customSpot &&
+      typeof body.customSpot === 'object' &&
+      typeof body.customSpot.name === 'string' &&
+      typeof body.customSpot.description === 'string' &&
+      typeof body.customSpot.style === 'string' &&
+      typeof body.customSpot.province === 'string'
+        ? {
+            id: spotId,
+            name: body.customSpot.name.slice(0, 50),
+            province: body.customSpot.province.slice(0, 20),
+            style: body.customSpot.style.slice(0, 50),
+            description: body.customSpot.description.slice(0, 500),
+            image: '',
+            recommendedCostumes: [],
+          }
+        : undefined);
+
     const costume = getCostumeById(costumeId);
     const headwear = getHeadwearById(headwearId);
     const makeup = getMakeupById(makeupId);

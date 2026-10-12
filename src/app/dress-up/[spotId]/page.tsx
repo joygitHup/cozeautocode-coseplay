@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 import { JsonLd } from '@/components/seo/json-ld';
 import { SpotSeoContent } from '@/components/seo/spot-seo-content';
 import { DressUpContent } from '@/components/dress-up/dress-up-content';
@@ -27,16 +26,14 @@ export function generateStaticParams() {
 
 export default async function DressUpSpotPage({ params }: PageProps) {
   const { spotId } = await params;
+  // 自定义场景存在浏览器 localStorage，服务端查不到，交给客户端组件兜底
   const spot = getScenicSpotById(spotId);
-  if (!spot) {
-    notFound();
-  }
 
   return (
     <>
-      <JsonLd data={buildSpotJsonLd(spot)} />
+      {spot && <JsonLd data={buildSpotJsonLd(spot)} />}
       <DressUpContent spotId={spotId} />
-      <SpotSeoContent spot={spot} />
+      {spot && <SpotSeoContent spot={spot} />}
     </>
   );
 }
