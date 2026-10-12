@@ -55,10 +55,10 @@ export async function POST(request: NextRequest) {
       jewelryIds = [],
       headwearId,
       makeupId,
-      scenicSpotId,
+      spotId,
     } = body;
 
-    if (!photoBase64 || !costumeId || !headwearId || !makeupId || !scenicSpotId) {
+    if (!photoBase64 || !costumeId || !headwearId || !makeupId || !spotId) {
       const response = NextResponse.json(
         { error: '缺少必要参数' },
         { status: 400 },
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    const scenicSpot = getScenicSpotById(scenicSpotId);
+    const scenicSpot = getScenicSpotById(spotId);
     const costume = getCostumeById(costumeId);
     const headwear = getHeadwearById(headwearId);
     const makeup = getMakeupById(makeupId);
@@ -110,6 +110,20 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json(
         { error: '未找到对应的景区或装扮数据' },
         { status: 400 },
+      );
+      if (isNew) attachGuestCookie(response, guestId);
+      return response;
+    }
+
+    const siliconflowKey = process.env.SILICONFLOW_API_KEY;
+    const cozeConfig = new Config();
+    if (!siliconflowKey && (!cozeConfig.baseUrl || !cozeConfig.apiKey)) {
+      const response = NextResponse.json(
+        {
+          error:
+            '生成服务未配置：请在 .env.local 中配置 SILICONFLOW_API_KEY（或 Coze 凭证 COZE_INTEGRATION_BASE_URL / COZE_WORKLOAD_IDENTITY_API_KEY）',
+        },
+        { status: 503 },
       );
       if (isNew) attachGuestCookie(response, guestId);
       return response;
@@ -169,27 +183,73 @@ ${jewelryDesc}
 4. 画面质量要高，细节要精致
 5. 光线和阴影要自然真实`;
 
-    const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
-    const config = new Config();
-    const client = new ImageGenerationClient(config, customHeaders);
-
     const imageDataUrl = photoBase64.startsWith('data:')
       ? photoBase64
       : `data:image/jpeg;base64,${photoBase64}`;
 
-    const response = await client.generate({
-      prompt,
-      image: imageDataUrl,
-      size: '2K',
-    });
+    // 优先 SiliconFlow（配置了 SILICONFLOW_API_KEY 时），否则回退 coze-coding-dev-sdk
+    let genOk = false;
+    let genImageUrl: string | null = null;
+    let genErr = '';
 
-    const helper = client.getResponseHelper(response);
+    if (siliconflowKey) {
+      try {
+        const sfRes = await fetch(
+          'https://api.siliconflow.cn/v1/images/generations',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${siliconflowKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model:
+                process.env.SILICONFLOW_IMAGE_MODEL || 'Kwai-Kolors/Kolors',
+              prompt,
+              image: imageDataUrl,
+              image_size: photoType === 'full-body' ? '720x1280' : '960x1280',
+              batch_size: 1,
+            }),
+            signal: AbortSignal.timeout(120000),
+          },
+        );
+        const sfData = (await sfRes.json()) as {
+          images?: { url: string }[];
+          message?: string;
+        };
+        if (sfRes.ok && sfData.images?.[0]?.url) {
+          genOk = true;
+          genImageUrl = sfData.images[0].url;
+        } else {
+          genErr = sfData.message || `SiliconFlow HTTP ${sfRes.status}`;
+        }
+      } catch (sfErr) {
+        genErr =
+          sfErr instanceof Error ? sfErr.message : 'SiliconFlow 请求失败';
+      }
+    } else {
+      const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+      const client = new ImageGenerationClient(cozeConfig, customHeaders);
+      const genResponse = await client.generate({
+        prompt,
+        image: imageDataUrl,
+        size: '2K',
+      });
+      const helper = client.getResponseHelper(genResponse);
+      if (helper.success && helper.imageUrls.length > 0) {
+        genOk = true;
+        genImageUrl = helper.imageUrls[0];
+      } else {
+        genErr = helper.errorMessages.join(', ') || '图像生成失败';
+      }
+    }
+
     const durationMs = Date.now() - startedAt;
 
-    if (helper.success && helper.imageUrls.length > 0) {
+    if (genOk && genImageUrl) {
       await appendGenerationLog({
         guestId,
-        scenicSpotId,
+        scenicSpotId: spotId,
         success: true,
         usedFree: reserved.usedFree,
         creditsBefore: reserved.creditsBefore,
@@ -201,7 +261,7 @@ ${jewelryDesc}
 
       const json = NextResponse.json({
         success: true,
-        imageUrl: helper.imageUrls[0],
+        imageUrl: genImageUrl,
         credits: availableCredits(reserved.wallet),
         usedFree: reserved.usedFree,
       });
@@ -209,7 +269,7 @@ ${jewelryDesc}
       return json;
     }
 
-    const errMsg = helper.errorMessages.join(', ') || '图像生成失败';
+    const errMsg = genErr || '图像生成失败';
     const rolled = await rollbackGenerationCredit(
       guestId,
       reserved.usedFree,
@@ -217,7 +277,7 @@ ${jewelryDesc}
     );
     await appendGenerationLog({
       guestId,
-      scenicSpotId,
+      scenicSpotId: spotId,
       success: false,
       usedFree: reserved.usedFree,
       creditsBefore: reserved.creditsBefore,

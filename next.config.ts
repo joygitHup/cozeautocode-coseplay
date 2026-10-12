@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['*.dev.coze.site'],
   // 微信支付 V3 SDK 依赖 superagent/formidable，动态 import 与 turbopack 不兼容，故外置
   serverExternalPackages: ['wechatpay-node-v3', 'superagent', 'formidable'],
+  // 输出独立可部署包：.next/standalone（含 node_modules 子集） + .next/static（静态资源）
+  output: 'standalone',
   images: {
     remotePatterns: [
       {

@@ -166,3 +166,5 @@ Desktop.ini
 .coze-logs
 .codegraph/
 .trae/
+
+dist-release/
